@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm[toml]>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fmri-codecs"
+dynamic = ["version"]
+description = "fMRI compression codecs"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "datasets",
+    "einops",
+    "ipython",
+    "jupyter",
+    "matplotlib",
+    "nibabel",
+    "numpy",
+    "pre-commit",
+    "pytest",
+    "scikit-learn",
+    "scipy",
+    "torch",
+]
+
+[tool.setuptools_scm]
+version_file = "src/fmri_codecs/_version.py"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+ignore = ["F722"]
