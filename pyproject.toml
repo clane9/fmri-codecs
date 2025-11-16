@@ -21,6 +21,8 @@ dependencies = [
     "scikit-learn",
     "scipy",
     "torch",
+    "webdataset",
+    "zstd",
 ]
 
 [tool.setuptools_scm]

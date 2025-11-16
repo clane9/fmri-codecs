@@ -45,7 +45,12 @@ def main():
         )
 
     dataset = hfds.DatasetDict(dataset_dict)
-    dataset.push_to_hub("clane9/openneuro-fslr64k", max_shard_size="600MB", num_proc=NUM_PROC)
+    dataset.save_to_disk(
+        ROOT / "datasets/openneuro-fslr64k.arrow",
+        num_shards={"train": 16, "test": 16},
+        num_proc=NUM_PROC,
+    )
+    # dataset.push_to_hub("clane9/openneuro-fslr64k", max_shard_size="600MB", num_proc=NUM_PROC)
 
 
 def generate_samples(root: Path, paths: list[str]):
