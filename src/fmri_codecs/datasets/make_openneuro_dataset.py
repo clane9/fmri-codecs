@@ -11,6 +11,7 @@ from sklearn.preprocessing import scale
 NUM_VERTICES = 64984
 
 EPS = 1e-6
+VMAX = 5.0
 NUM_PROC = 16
 
 ROOT = Path(__file__).parents[3]
@@ -50,7 +51,6 @@ def main():
         num_shards={"train": 16, "test": 16},
         num_proc=NUM_PROC,
     )
-    # dataset.push_to_hub("clane9/openneuro-fslr64k", max_shard_size="600MB", num_proc=NUM_PROC)
 
 
 def generate_samples(root: Path, paths: list[str]):
@@ -67,6 +67,7 @@ def generate_samples(root: Path, paths: list[str]):
 
         valid_mask = np.std(series, axis=0) > EPS
         series = scale(series)
+        series = np.clip(series, -VMAX, VMAX)
         series = series * valid_mask
         series = series.astype(np.float16)
 

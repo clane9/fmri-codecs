@@ -1,6 +1,6 @@
-# fMRI compression benchmark
+# fMRI codecs datasets
 
-## Benchmark dataset construction
+## OpenNeuro benchmark dataset construction
 
 ### 1. Download preprocessed OpenNeuro datasets
 
@@ -16,7 +16,7 @@ aws s3 sync --no-sign-request s3://openneuro-derivatives/fmriprep "${out_dir}" \
 ### 2. Generate dataset splits
 
 As of 2025-11-11, there are 71 preprocessed datasets available at `s3://openneuro-derivatives` with a total of 9373 fMRI runs.
-We include datasets with total number of runs between 20 and 200, and then split datasets into train/test so that each split contains roughly equal number of runs.
+We include datasets with at least 20 subjects, and include runs with between 100 and 300 TRs. This leaves 30 datasets after filtering. We randomly split the datasets into a 50/50 train/test split. For each dataset, we include 20 random subjects and one run per subject. 
 
 ```bash
 uv run python src/fmri_codecs/benchmark/make_openneuro_splits.py
@@ -24,7 +24,7 @@ uv run python src/fmri_codecs/benchmark/make_openneuro_splits.py
 
 ### 3. Generate the huggingface dataset
 
-To generate and upload the huggingface benchmark dataset, run
+To generate the huggingface benchmark dataset, run
 
 ```bash
  uv run python src/fmri_codecs/benchmark/make_openneuro_dataset.py
@@ -44,4 +44,18 @@ This creates a dataset with the following [features](https://huggingface.co/docs
 }
 ```
 
-To update the dataset splits, copy the output from [Step 2](#2-generate-dataset-splits) into the dataset generation script.
+### 4. Upload the dataset to huggingface hub
+
+For reproducibility, we upload the dataset to the huggingface hub at [`clane9/openneuro-fslr64k.arrow`](https://huggingface.co/datasets/clane9/openneuro-fslr64k.arrow).
+
+```python
+from huggingface_hub import HfApi
+
+api = HfApi()
+api.upload_large_folder(
+    "clane9/openneuro-fslr64k.arrow",
+    "datasets/openneuro-fslr64k.arrow",
+    repo_type="dataset",
+    num_workers=8,
+)
+```
