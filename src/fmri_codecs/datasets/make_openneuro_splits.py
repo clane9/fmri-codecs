@@ -62,7 +62,7 @@ def main():
                 file_list.append(path)
         file_splits[split] = file_list
 
-    out_path = ROOT / "config/openneuro_file_splits.json"
+    out_path = ROOT / "datasets/openneuro_file_splits.json"
     with out_path.open("w") as f:
         json.dump(file_splits, f, indent=4)
 

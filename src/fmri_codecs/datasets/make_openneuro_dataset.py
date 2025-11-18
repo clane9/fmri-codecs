@@ -18,7 +18,7 @@ ROOT = Path(__file__).parents[3]
 
 
 def main():
-    file_splits_path = ROOT / "config/openneuro_file_splits.json"
+    file_splits_path = ROOT / "datasets/openneuro_file_splits.json"
     with file_splits_path.open() as f:
         file_splits = json.load(f)
 

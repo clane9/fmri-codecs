@@ -19,7 +19,7 @@ As of 2025-11-11, there are 71 preprocessed datasets available at `s3://openneur
 We include datasets with at least 20 subjects, and include runs with between 100 and 300 TRs. This leaves 30 datasets after filtering. We randomly split the datasets into a 50/50 train/test split. For each dataset, we include 20 random subjects and one run per subject.
 
 ```bash
-uv run python src/fmri_codecs/benchmark/make_openneuro_splits.py
+uv run python src/fmri_codecs/datasets/make_openneuro_splits.py
 ```
 
 ### 3. Generate the huggingface dataset
@@ -27,7 +27,7 @@ uv run python src/fmri_codecs/benchmark/make_openneuro_splits.py
 To generate the huggingface benchmark dataset, run
 
 ```bash
- uv run python src/fmri_codecs/benchmark/make_openneuro_dataset.py
+ uv run python src/fmri_codecs/datasets/make_openneuro_dataset.py
 ```
 
 This creates a dataset with the following [features](https://huggingface.co/docs/datasets/en/about_dataset_features).
