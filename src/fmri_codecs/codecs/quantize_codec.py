@@ -5,7 +5,7 @@ from typing import Literal
 import numpy as np
 import zstd
 
-from fmri_codecs.core import register_codec
+from fmri_codecs import register_codec
 
 
 class QuantizeCodec:
@@ -45,9 +45,6 @@ class QuantizeCodec:
         x = _decode_numpy(x)
         x = x * self.bin_width
         return x
-
-    def fit(self, x: np.ndarray):
-        return self
 
 
 def _encode_numpy(x: np.ndarray) -> bytes:
