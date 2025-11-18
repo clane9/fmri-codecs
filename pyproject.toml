@@ -16,12 +16,13 @@ dependencies = [
     "matplotlib",
     "nibabel",
     "numpy",
+    "omegaconf",
     "pre-commit",
     "pytest",
     "scikit-learn",
     "scipy",
+    "tabulate",
     "torch",
-    "webdataset",
     "zstd",
 ]
 
