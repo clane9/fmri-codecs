@@ -1,0 +1,8 @@
+out_dir: benchmark
+
+# list of codecs to include
+# defaults to all
+codecs: null
+
+log_level: INFO
+seed: 42

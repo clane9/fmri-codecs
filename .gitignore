@@ -23,10 +23,8 @@ _version.py
 .ipynb_checkpoints
 
 # Local data
-datasets
-checkpoints
-wandb
-jobs
+^datasets
+benchmark
 notebooks
 
 # Local scratch/tmp
