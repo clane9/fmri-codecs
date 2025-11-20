@@ -14,6 +14,7 @@ dependencies = [
     "ipython",
     "jupyter",
     "matplotlib",
+    "neuromaps",
     "nibabel",
     "numpy",
     "omegaconf",
@@ -23,8 +24,12 @@ dependencies = [
     "scipy",
     "tabulate",
     "torch",
+    "yaspy",
     "zstd",
 ]
+
+[tool.uv.sources]
+yaspy = { git = "https://github.com/childmindresearch/yaspy.git" }
 
 [tool.setuptools_scm]
 version_file = "src/fmri_codecs/_version.py"

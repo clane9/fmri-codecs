@@ -1,8 +1,5 @@
 import argparse
-import io
 import logging
-import random
-import sys
 import time
 import yaml
 from importlib import resources
@@ -11,12 +8,12 @@ from pathlib import Path
 import datasets as hfds
 import numpy as np
 import pandas as pd
-import torch
 from omegaconf import OmegaConf, DictConfig
 from tqdm import tqdm
 
 import fmri_codecs
 import fmri_codecs.config
+from fmri_codecs.utils import random_seed, setup_logger, encode_numpy
 
 
 logging.basicConfig(
@@ -26,7 +23,6 @@ logging.basicConfig(
 )
 _logger = logging.getLogger(__name__)
 
-# TODO: remove after the dataset is updated to have clipping already applied
 VMAX = 5.0
 
 BENCH_DATASET = "clane9/openneuro-fslr64k.arrow"
@@ -98,7 +94,7 @@ def fit_single(
     train_dataset: hfds.Dataset,
     vmax: float = 5.0,
 ):
-    X_train = [clip_values(sample["bold"], vmax) for sample in train_dataset]
+    X_train = [clip_values(sample["bold"], vmax) for sample in tqdm(train_dataset)]
     codec.fit(X_train)
     return codec
 
@@ -156,51 +152,16 @@ def clip_values(x: np.ndarray, vmax: float) -> np.ndarray:
     return np.clip(x, -vmax, vmax)
 
 
-def encode_numpy(x: np.ndarray) -> bytes:
-    with io.BytesIO() as f:
-        np.save(f, x)
-        x = f.getvalue()
-    return x
-
-
-def random_seed(seed: int):
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-
-def setup_logger(
-    logger: logging.Logger,
-    level: str = "INFO",
-    log_path: Path | None = None,
-):
-    logger.setLevel(level)
-
-    # clean up any existing handlers
-    for h in logger.handlers:
-        logger.removeHandler(h)
-    logger.root.handlers = []
-
-    fmt = "[%(levelname)s %(asctime)s]: %(message)s"
-    formatter = logging.Formatter(fmt, datefmt="%y-%m-%d %H:%M:%S")
-
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(formatter)
-    handler.setLevel(level)
-    logger.addHandler(handler)
-
-    if log_path:
-        handler = logging.FileHandler(log_path)
-        handler.setFormatter(formatter)
-        handler.setLevel(level)
-        logger.addHandler(handler)
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--cfg-path", type=str, default=None)
     parser.add_argument("--overrides", type=str, default=None, nargs="+")
-    args = parser.parse_args()
+    args = parser.parse_args(
+        [
+            "--overrides",
+            "codecs=[bpeg_n400_d32_nb1024_none]",
+        ]
+    )
 
     with resources.path(fmri_codecs.config, "default_benchmark.yaml") as default_cfg_path:
         cfg = OmegaConf.load(default_cfg_path)

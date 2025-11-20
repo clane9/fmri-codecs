@@ -4,14 +4,14 @@ from pathlib import Path
 import datasets as hfds
 import numpy as np
 import nibabel as nib
-from nibabel.cifti2 import BrainModelAxis, Cifti2Image
 from sklearn.preprocessing import scale
+
+from fmri_codecs.utils import get_cifti_surf_data
 
 # Number of total fslr vertices across cortex
 NUM_VERTICES = 64984
 
 EPS = 1e-6
-VMAX = 5.0
 NUM_PROC = 16
 
 ROOT = Path(__file__).parents[3]
@@ -67,7 +67,6 @@ def generate_samples(root: Path, paths: list[str]):
 
         valid_mask = np.std(series, axis=0) > EPS
         series = scale(series)
-        series = np.clip(series, -VMAX, VMAX)
         series = series * valid_mask
         series = series.astype(np.float16)
 
@@ -86,34 +85,6 @@ def parse_metadata(path: Path):
         meta["run"] = int(meta["run"])
     meta = {"dataset": dataset, **meta}
     return meta
-
-
-def get_cifti_surf_data(cifti: Cifti2Image) -> np.ndarray:
-    lh_data = get_cifti_struct_data(cifti, "CIFTI_STRUCTURE_CORTEX_LEFT")
-    rh_data = get_cifti_struct_data(cifti, "CIFTI_STRUCTURE_CORTEX_RIGHT")
-    data = np.concatenate([lh_data, rh_data], axis=0)
-    return data
-
-
-def get_cifti_struct_data(cifti: Cifti2Image, struct: str) -> np.ndarray:
-    """Get cifti scalar/series data for a given brain structure."""
-    axis = get_brain_model_axis(cifti)
-    data = cifti.get_fdata().T
-    for name, indices, model in axis.iter_structures():
-        if name == struct:
-            num_verts = model.vertex.max() + 1
-            struct_data = np.zeros((num_verts,) + data.shape[1:], dtype=data.dtype)
-            struct_data[model.vertex] = data[indices]
-            return struct_data
-    raise ValueError(f"Invalid cifti struct {struct}")
-
-
-def get_brain_model_axis(cifti: Cifti2Image) -> BrainModelAxis:
-    for ii in range(cifti.ndim):
-        axis = cifti.header.get_axis(ii)
-        if isinstance(axis, BrainModelAxis):
-            return axis
-    raise ValueError("No brain model axis found in cifti")
 
 
 if __name__ == "__main__":

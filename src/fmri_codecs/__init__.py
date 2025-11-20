@@ -25,8 +25,6 @@ _CODEC_REGISTRY: dict[str, Callable[..., Codec]] = {}
 def register_codec(name_or_func: str | Callable | None = None):
     def _decorator(func: Callable):
         name = name_or_func if isinstance(name_or_func, str) else func.__name__
-        if name in _CODEC_REGISTRY:
-            raise ValueError(f"Codec {name} already registered")
         _CODEC_REGISTRY[name] = func
         return func
 
