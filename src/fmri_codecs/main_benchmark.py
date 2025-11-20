@@ -156,12 +156,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--cfg-path", type=str, default=None)
     parser.add_argument("--overrides", type=str, default=None, nargs="+")
-    args = parser.parse_args(
-        [
-            "--overrides",
-            "codecs=[bpeg_n400_d32_nb1024_none]",
-        ]
-    )
+    args = parser.parse_args()
 
     with resources.path(fmri_codecs.config, "default_benchmark.yaml") as default_cfg_path:
         cfg = OmegaConf.load(default_cfg_path)
