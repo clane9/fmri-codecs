@@ -14,9 +14,11 @@ import numpy as np
 import pandas as pd
 import torch
 from omegaconf import OmegaConf, DictConfig
+from skimage.metrics import structural_similarity
 from tqdm import tqdm
 
 import fmri_codecs.config
+import fmri_codecs.nisc as nisc
 from fmri_codecs.codecs.base import Codec
 from fmri_codecs.codecs.common import encode_numpy
 from fmri_codecs.codecs.registry import create_codec, import_codecs
@@ -69,6 +71,8 @@ def main(cfg: DictConfig):
     codecs_fmt = "\n".join(f"- {codec}" for _, codec in codecs)
     _logger.info(f"\n{codecs_fmt}")
 
+    resampler = nisc.flat_resampler_fslr64k_224_560()
+
     results = []
     for name, codec in codecs:
         if hasattr(codec, "fit"):
@@ -76,7 +80,7 @@ def main(cfg: DictConfig):
             fit_single(codec, train_dataset, vmax=VMAX)
 
         _logger.info(f"Evaluating {name}")
-        result = evaluate_single(codec, test_dataset, vmax=VMAX)
+        result = evaluate_single(codec, test_dataset, resampler=resampler, vmax=VMAX)
         result.insert(0, "hparams", json.dumps(codec.hparams()))
         result.insert(0, "name", name)
         result.insert(0, "codec", str(codec))
@@ -91,15 +95,16 @@ def main(cfg: DictConfig):
         .agg(
             {
                 "decode_fps": ["mean", "std"],
-                "log_ratio": ["mean", "std"],
-                "psnr": ["mean", "std"],
+                "ratio": ["mean", "std"],
+                "mse": ["mean", "std"],
+                "ssim": ["mean", "std"],
             }
         )
         .reset_index()
     )
     summary.columns = ["codec"] + [
         f"{metric}__{agg}"
-        for metric in ["decode_fps", "log_ratio", "psnr"]
+        for metric in ["decode_fps", "ratio", "mse", "ssim"]
         for agg in ["mean", "std"]
     ]
     _logger.info(f"Summary:\n{summary.to_markdown(index=False)}")
@@ -126,11 +131,13 @@ def fit_single(
 def evaluate_single(
     codec: Codec,
     test_dataset: hfds.Dataset,
+    resampler: nisc.FlatResampler,
     vmax: float = 5.0,
 ):
     records = []
     for sample in tqdm(test_dataset):
         x = clip_values(sample.pop("bold"), vmax)
+        x = x[32:64:2]
         buf = codec.encode(x)
         buf_raw = encode_numpy(x.astype(np.float16))
 
@@ -138,14 +145,20 @@ def evaluate_single(
         x_ = codec.decode(buf)
         dec_t = time.perf_counter() - tic
 
-        err = ((x - x_) ** 2).mean(axis=-1).sum()
+        mse = ((x - x_) ** 2).mean()
+
+        flat_x = resampler.transform(x)
+        flat_x_ = resampler.transform(x_)
+        ssim = structural_similarity(flat_x, flat_x_, win_size=11, data_range=2 * vmax)
 
         record = {
             **sample,
+            "n_frames": len(x),
             "decode_time": dec_t,
             "length": len(buf),
             "length_raw": len(buf_raw),
-            "err": err,
+            "mse": mse,
+            "ssim": ssim,
         }
         records.append(record)
 
@@ -158,17 +171,17 @@ def evaluate_single(
                 "decode_time": "sum",
                 "length": "sum",
                 "length_raw": "sum",
-                "err": "sum",
+                "mse": "mean",
+                "ssim": "mean",
             }
         )
         .reset_index()
     )
     result["decode_fps"] = result["n_frames"] / result["decode_time"]
-    result["log_ratio"] = np.log10(result["length"] / result["length_raw"])
-    mse = result["err"] / result["n_frames"]
-    result["psnr"] = 10 * np.log10(1 / mse)  # inputs are std scaled so baseline mse is 1
+    result["ratio"] = result["length"] / result["length_raw"]
+    # nb, could also compute psnr 10 * log10(1 / mse)
 
-    result = result.loc[:, ["dataset", "decode_fps", "log_ratio", "psnr"]]
+    result = result.loc[:, ["dataset", "decode_fps", "ratio", "mse", "ssim"]]
     return result
 
 
