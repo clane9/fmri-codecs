@@ -3,10 +3,9 @@ from pathlib import Path
 
 import datasets as hfds
 import numpy as np
-import nibabel as nib
 from sklearn.preprocessing import scale
 
-from fmri_codecs.utils import get_cifti_surf_data
+import fmri_codecs.nisc as nisc
 
 # Number of total fslr vertices across cortex
 NUM_VERTICES = 64984
@@ -58,9 +57,7 @@ def generate_samples(root: Path, paths: list[str]):
         path = root / path
         meta = parse_metadata(path)
 
-        img = nib.load(path)
-        series = get_cifti_surf_data(img)
-        series = np.ascontiguousarray(series.T)
+        series = nisc.read_cifti_surf_data(path)
 
         T, D = series.shape
         assert D == NUM_VERTICES

@@ -1,19 +1,25 @@
 import argparse
+import json
 import logging
+import random
+import sys
 import time
 import yaml
 from importlib import resources
+from itertools import product
 from pathlib import Path
 
 import datasets as hfds
 import numpy as np
 import pandas as pd
+import torch
 from omegaconf import OmegaConf, DictConfig
 from tqdm import tqdm
 
-import fmri_codecs
 import fmri_codecs.config
-from fmri_codecs.utils import random_seed, setup_logger, encode_numpy
+from fmri_codecs.codecs.base import Codec
+from fmri_codecs.codecs.common import encode_numpy
+from fmri_codecs.codecs.registry import create_codec, import_codecs
 
 
 logging.basicConfig(
@@ -42,7 +48,7 @@ def main(cfg: DictConfig):
     _logger.info("Config:\n%s", yaml.safe_dump(OmegaConf.to_object(cfg), sort_keys=False))
     _logger.info(f"Saving to output dir: {out_dir}")
 
-    modules = fmri_codecs.import_codecs()
+    modules = import_codecs()
     _logger.info(f"Found {len(modules)} codec modules:\n{modules}")
 
     _logger.info(f"Loading benchmark dataset: {BENCH_DATASET}")
@@ -50,21 +56,32 @@ def main(cfg: DictConfig):
     train_dataset = dataset_dict["train"].with_format("numpy")
     test_dataset = dataset_dict["test"].with_format("numpy")
 
-    names = list(cfg.codecs) if cfg.codecs else fmri_codecs.list_codecs()
+    names = list(cfg.include_codecs) if cfg.include_codecs else list(cfg.codecs)
     _logger.info(f"Loading codecs: {names}")
-    codecs = {name: fmri_codecs.create_codec(name) for name in names}
+
+    codecs: list[tuple[str, Codec]] = []
+    for name in names:
+        hparam_grid = cfg.codecs[name]
+        for hparams in generate_hparams(hparam_grid):
+            codec = create_codec(name, **hparams)
+            codecs.append((name, codec))
+
+    codecs_fmt = "\n".join(f"- {codec}" for _, codec in codecs)
+    _logger.info(f"\n{codecs_fmt}")
 
     results = []
-    for name, codec in codecs.items():
+    for name, codec in codecs:
         if hasattr(codec, "fit"):
             _logger.info(f"Fitting {name}")
             fit_single(codec, train_dataset, vmax=VMAX)
 
         _logger.info(f"Evaluating {name}")
         result = evaluate_single(codec, test_dataset, vmax=VMAX)
-        result.insert(0, "codec", name)
+        result.insert(0, "hparams", json.dumps(codec.hparams()))
+        result.insert(0, "name", name)
+        result.insert(0, "codec", str(codec))
 
-        _logger.info(f"Result ({name}):\n{result.to_markdown(index=False)}")
+        _logger.info(f"Result ({codec}):\n{result.to_markdown(index=False)}")
         result.to_csv(out_dir / f"result__{name}.csv", index=False)
         results.append(result)
 
@@ -89,8 +106,15 @@ def main(cfg: DictConfig):
     summary.to_csv(out_dir / "summary.csv", index=False)
 
 
+def generate_hparams(hparam_grid: dict[str, list[int | str | float]]):
+    param_values = product(*hparam_grid.values())
+    for values in param_values:
+        hparams = {k: v for k, v in zip(hparam_grid, values)}
+        yield hparams
+
+
 def fit_single(
-    codec: fmri_codecs.Codec,
+    codec: Codec,
     train_dataset: hfds.Dataset,
     vmax: float = 5.0,
 ):
@@ -100,7 +124,7 @@ def fit_single(
 
 
 def evaluate_single(
-    codec: fmri_codecs.Codec,
+    codec: Codec,
     test_dataset: hfds.Dataset,
     vmax: float = 5.0,
 ):
@@ -114,7 +138,7 @@ def evaluate_single(
         x_ = codec.decode(buf)
         dec_t = time.perf_counter() - tic
 
-        err = np.sum((x - x_) ** 2)
+        err = ((x - x_) ** 2).mean(axis=-1).sum()
 
         record = {
             **sample,
@@ -142,10 +166,43 @@ def evaluate_single(
     result["decode_fps"] = result["n_frames"] / result["decode_time"]
     result["log_ratio"] = np.log10(result["length"] / result["length_raw"])
     mse = result["err"] / result["n_frames"]
-    result["psnr"] = 10 * np.log10(((2 * vmax) ** 2) / mse)
+    result["psnr"] = 10 * np.log10(1 / mse)  # inputs are std scaled so baseline mse is 1
 
     result = result.loc[:, ["dataset", "decode_fps", "log_ratio", "psnr"]]
     return result
+
+
+def random_seed(seed: int):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+
+
+def setup_logger(
+    logger: logging.Logger,
+    level: str = "INFO",
+    log_path: Path | None = None,
+):
+    logger.setLevel(level)
+
+    # clean up any existing handlers
+    for h in logger.handlers:
+        logger.removeHandler(h)
+    logger.root.handlers = []
+
+    fmt = "[%(levelname)s %(asctime)s]: %(message)s"
+    formatter = logging.Formatter(fmt, datefmt="%y-%m-%d %H:%M:%S")
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+    handler.setLevel(level)
+    logger.addHandler(handler)
+
+    if log_path:
+        handler = logging.FileHandler(log_path)
+        handler.setFormatter(formatter)
+        handler.setLevel(level)
+        logger.addHandler(handler)
 
 
 def clip_values(x: np.ndarray, vmax: float) -> np.ndarray:

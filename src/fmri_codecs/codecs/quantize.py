@@ -4,16 +4,16 @@ from typing import Literal
 import numpy as np
 import zstd
 
-from fmri_codecs import register_codec
-from fmri_codecs.utils import encode_numpy, decode_numpy
+from fmri_codecs.codecs.registry import register_codec
+from fmri_codecs.codecs.common import encode_numpy, decode_numpy
 
 
 class QuantizeCodec:
     def __init__(
         self,
         n_bins: int = 4096,
-        vmax: float = 5.0,
         compression: Literal["gzip", "zstd", "none"] = "zstd",
+        vmax: float = 5.0,
     ):
         self.n_bins = n_bins
         self.vmax = vmax
@@ -30,6 +30,15 @@ class QuantizeCodec:
             "zstd": zstd.decompress,
             "none": _noop,
         }[compression]
+
+    def hparams(self) -> dict[str, int | str | float]:
+        return {
+            "n_bins": self.n_bins,
+            "compression": self.compression,
+        }
+
+    def __str__(self):
+        return f"quantize_nb-{self.n_bins}_comp-{self.compression}"
 
     def encode(self, x: np.ndarray) -> bytes:
         x = np.round(x / self.bin_width)
@@ -52,60 +61,5 @@ def _noop(x):
 
 
 @register_codec
-def quantize_nb256_none():
-    return QuantizeCodec(n_bins=256, compression="none")
-
-
-@register_codec
-def quantize_nb512_none():
-    return QuantizeCodec(n_bins=512, compression="none")
-
-
-@register_codec
-def quantize_nb1024_none():
-    return QuantizeCodec(n_bins=1024, compression="none")
-
-
-@register_codec
-def quantize_nb2048_none():
-    return QuantizeCodec(n_bins=2048, compression="none")
-
-
-@register_codec
-def quantize_nb256_gzip():
-    return QuantizeCodec(n_bins=256, compression="gzip")
-
-
-@register_codec
-def quantize_nb512_gzip():
-    return QuantizeCodec(n_bins=512, compression="gzip")
-
-
-@register_codec
-def quantize_nb1024_gzip():
-    return QuantizeCodec(n_bins=1024, compression="gzip")
-
-
-@register_codec
-def quantize_nb2048_gzip():
-    return QuantizeCodec(n_bins=2048, compression="gzip")
-
-
-@register_codec
-def quantize_nb256_zstd():
-    return QuantizeCodec(n_bins=256, compression="zstd")
-
-
-@register_codec
-def quantize_nb512_zstd():
-    return QuantizeCodec(n_bins=512, compression="zstd")
-
-
-@register_codec
-def quantize_nb1024_zstd():
-    return QuantizeCodec(n_bins=1024, compression="zstd")
-
-
-@register_codec
-def quantize_nb2048_zstd():
-    return QuantizeCodec(n_bins=2048, compression="zstd")
+def quantize(**kwargs):
+    return QuantizeCodec(**kwargs)

@@ -11,8 +11,9 @@ from torch import Tensor
 from scipy.sparse import coo_array
 from neuromaps.datasets import fetch_fslr
 
-from fmri_codecs import register_codec
-from fmri_codecs.utils import fetch_schaefer, get_cifti_surf_data, encode_numpy, decode_numpy
+import fmri_codecs.nisc as nisc
+from fmri_codecs.codecs.registry import register_codec
+from fmri_codecs.codecs.common import encode_numpy, decode_numpy
 
 NUM_VERTICES = 64984
 
@@ -20,29 +21,29 @@ NUM_VERTICES = 64984
 class BrainPEGCodec(nn.Module):
     def __init__(
         self,
-        num_rois: int = 400,
+        n_rois: int = 400,
         dim: int = 32,
         n_bins: int = 4096,
-        vmax: float = 5.0,
         compression: Literal["gzip", "zstd", "none"] = "zstd",
+        vmax: float = 5.0,
     ):
         super().__init__()
-        self.num_rois = num_rois
+        self.n_rois = n_rois
         self.dim = dim
         self.n_bins = n_bins
         self.vmax = vmax
         self.compression = compression
 
-        parc = load_schaefer(num_rois)
+        parc = load_schaefer(n_rois)
         self.parcellate = Parcellate(parc)
 
-        self.proj = ParcelLinear(num_rois, self.parcellate.max_size, dim)
-        weight = load_schaefer_spectral_basis(num_rois, dim)
+        self.proj = ParcelLinear(n_rois, self.parcellate.max_size, dim)
+        weight = load_schaefer_spectral_basis(n_rois, dim)
         weight = self.parcellate.forward(weight)  # [d, P, S]
         weight = weight.transpose(0, 1).contiguous()  # [P, d, S]
         self.proj.weight.data.copy_(weight)
 
-        self.scale = nn.Parameter(torch.ones((num_rois, 1)), requires_grad=False)
+        self.scale = nn.Parameter(torch.ones((n_rois, 1)), requires_grad=False)
 
         self.bin_width = 2 * self.vmax / self.n_bins
         self.compress = {
@@ -55,6 +56,17 @@ class BrainPEGCodec(nn.Module):
             "zstd": zstd.decompress,
             "none": _noop,
         }[compression]
+
+    def hparams(self) -> dict[str, int | str | float]:
+        return {
+            "n_rois": self.n_rois,
+            "dim": self.dim,
+            "n_bins": self.n_bins,
+            "compression": self.compression,
+        }
+
+    def __str__(self):
+        return f"bpeg_nr-{self.n_rois}_d-{self.dim}_nb-{self.n_bins}_comp-{self.compression}"
 
     def forward(self, x: Tensor):
         x = self.parcellate(x)
@@ -217,9 +229,8 @@ def load_schaefer_spectral_basis(num_rois: int, dim: int) -> np.ndarray:
 
 
 def load_schaefer(num_rois: int) -> np.ndarray:
-    path = fetch_schaefer(num_rois)
-    img = nib.load(path)
-    parc = get_cifti_surf_data(img)
+    path = nisc.fetch_schaefer(num_rois)
+    parc = nisc.read_cifti_surf_data(path)
     return parc.squeeze()
 
 
@@ -263,15 +274,5 @@ def find_spectral_basis(A: np.ndarray):
 
 
 @register_codec
-def bpeg_n400_d32_nb1024_none():
-    return BrainPEGCodec(num_rois=400, dim=32, n_bins=1024, compression="none")
-
-
-@register_codec
-def bpeg_n400_d48_nb1024_none():
-    return BrainPEGCodec(num_rois=400, dim=48, n_bins=1024, compression="none")
-
-
-@register_codec
-def bpeg_n400_d64_nb1024_none():
-    return BrainPEGCodec(num_rois=400, dim=64, n_bins=1024, compression="none")
+def brainpeg(**kwargs):
+    return BrainPEGCodec(**kwargs)

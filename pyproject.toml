@@ -19,6 +19,7 @@ dependencies = [
     "numpy",
     "omegaconf",
     "pre-commit",
+    "pycortex>=1.2.11",
     "pytest",
     "scikit-learn",
     "scipy",

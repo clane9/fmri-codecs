@@ -1,8 +1,16 @@
 out_dir: benchmark
 
-# list of codecs to include
-# defaults to all
-codecs: null
+codecs:
+  quantize:
+    n_bins: [256]
+    compression: [zstd]
+
+  brainpeg:
+    dim: [32]
+    n_bins: [256]
+    compression: [zstd]
+
+include_codecs: null
 
 log_level: INFO
 seed: 42
